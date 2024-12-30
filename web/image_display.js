@@ -959,7 +959,6 @@ class MediaPlayerNode extends BaseNode {
     }
     applyTheme() {
         const isDark = this.properties.theme === 'dark';
-
         const colors = {
             dark: {
                 nodeBg: '#1E1E1E',        // 节点背景
@@ -978,13 +977,14 @@ class MediaPlayerNode extends BaseNode {
         };
         
         const theme = isDark ? colors.dark : colors.light;
+
         this.color = theme.nodeColor;
         this.bgcolor = theme.nodeBg;
 
         if (this.inner) {
             this.inner.style.background = theme.contentBg;
 
-            const darkModeStyles = `
+            const themeStyles = `
                 .dark-theme {
                     color: ${colors.dark.textColor} !important;
                     background: ${colors.dark.contentBg} !important;
@@ -1018,19 +1018,40 @@ class MediaPlayerNode extends BaseNode {
                 .dark-theme hr {
                     border-color: #4f4f4f !important;
                 }
+
+                .markdown-body:not(.dark-theme) {
+                    color: ${colors.light.textColor} !important;
+                    background: ${colors.light.contentBg} !important;
+                }
+                .markdown-body:not(.dark-theme) h1,
+                .markdown-body:not(.dark-theme) h2,
+                .markdown-body:not(.dark-theme) h3,
+                .markdown-body:not(.dark-theme) h4,
+                .markdown-body:not(.dark-theme) h5,
+                .markdown-body:not(.dark-theme) h6 {
+                    color: ${colors.light.headingColor} !important;
+                }
+                .markdown-body:not(.dark-theme) code {
+                    color: #24292f !important;
+                    background-color: #f6f8fa !important;
+                }
+                .markdown-body:not(.dark-theme) pre {
+                    background-color: #f6f8fa !important;
+                }
+                .markdown-body:not(.dark-theme) a {
+                    color: #0969da !important;
+                }
             `;
-    
-            const oldStyle = document.getElementById('dark-mode-styles');
+
+            const oldStyle = document.getElementById('theme-styles');
             if (oldStyle) {
                 oldStyle.remove();
             }
 
-            if (isDark) {
-                const styleTag = document.createElement('style');
-                styleTag.id = 'dark-mode-styles';
-                styleTag.textContent = darkModeStyles;
-                document.head.appendChild(styleTag);
-            }
+            const styleTag = document.createElement('style');
+            styleTag.id = 'theme-styles';
+            styleTag.textContent = themeStyles;
+            document.head.appendChild(styleTag);
 
             if (!this.properties.url) {
                 this.inner.innerHTML = `
