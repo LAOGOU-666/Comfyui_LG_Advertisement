@@ -897,7 +897,6 @@ class MediaPlayerNode extends BaseNode {
         this.addProperty("theme", "light", "enum", { 
             values: ["light", "dark"]
         });
-        
         const container = document.createElement('div');
         const inner = document.createElement('div');
         this.inner = inner;
@@ -912,16 +911,17 @@ class MediaPlayerNode extends BaseNode {
             height: 100%;
             background: white;
             display: flex;
-            overflow: hidden; 
+            overflow: hidden;
+            background: transparent;
         `;
         
         inner.style.cssText = `
             width: 100%;
             height: 100%;
             box-sizing: border-box;
-            overflow-y: auto;  
+            overflow-y: auto;
             overflow-x: hidden; 
-            background: #f0f0f0;
+            background: transparent;
         `;
 
         this.html_widget = this.addDOMWidget('HTML', 'html', container, {
@@ -941,7 +941,6 @@ class MediaPlayerNode extends BaseNode {
         };
 
         this.loadMarkedLibrary();
-        
         this.onConstructed();
         this.updateContent();
         this.applyTheme();
@@ -960,16 +959,35 @@ class MediaPlayerNode extends BaseNode {
     }
     applyTheme() {
         const isDark = this.properties.theme === 'dark';
+
+        const colors = {
+            dark: {
+                nodeBg: '#1E1E1E',        // 节点背景
+                nodeColor: '#2D2D2D',      // 节点边框
+                contentBg: '#1E1E1E',      // 内容区背景
+                textColor: '#E0E0E0',      // 文本颜色
+                headingColor: '#ffffff'     // 标题颜色
+            },
+            light: {
+                nodeBg: '#FFFFFF',
+                nodeColor: '#E0E0E0',
+                contentBg: '#FFFFFF',
+                textColor: '#666666',
+                headingColor: '#333333'
+            }
+        };
         
-        this.color = isDark ? "#2D2D2D" : "#E0E0E0";
-        this.bgcolor = isDark ? "#1E1E1E" : "#FFFFFF";
-        
+        const theme = isDark ? colors.dark : colors.light;
+        this.color = theme.nodeColor;
+        this.bgcolor = theme.nodeBg;
+
         if (this.inner) {
-            this.inner.style.background = isDark ? '#1E1E1E' : '#f0f0f0';
+            this.inner.style.background = theme.contentBg;
 
             const darkModeStyles = `
                 .dark-theme {
-                    color: #E0E0E0 !important;
+                    color: ${colors.dark.textColor} !important;
+                    background: ${colors.dark.contentBg} !important;
                 }
                 .dark-theme a {
                     color: #58a6ff !important;
@@ -980,14 +998,14 @@ class MediaPlayerNode extends BaseNode {
                 .dark-theme h4, 
                 .dark-theme h5, 
                 .dark-theme h6 {
-                    color: #ffffff !important;
+                    color: ${colors.dark.headingColor} !important;
                 }
                 .dark-theme code {
                     color: #e6e6e6 !important;
-                    background-color: #2d2d2d !important;
+                    background-color: ${colors.dark.nodeColor} !important;
                 }
                 .dark-theme pre {
-                    background-color: #2d2d2d !important;
+                    background-color: ${colors.dark.nodeColor} !important;
                 }
                 .dark-theme blockquote {
                     color: #bebebe !important;
@@ -1001,7 +1019,7 @@ class MediaPlayerNode extends BaseNode {
                     border-color: #4f4f4f !important;
                 }
             `;
-
+    
             const oldStyle = document.getElementById('dark-mode-styles');
             if (oldStyle) {
                 oldStyle.remove();
@@ -1013,24 +1031,23 @@ class MediaPlayerNode extends BaseNode {
                 styleTag.textContent = darkModeStyles;
                 document.head.appendChild(styleTag);
             }
-    
 
             if (!this.properties.url) {
                 this.inner.innerHTML = `
                     <div style="
                         padding: 20px;
-                        background: ${isDark ? '#2D2D2D' : 'white'};
+                        background: ${theme.contentBg};
                         border-radius: 4px;
                         height: 100%;
                         box-sizing: border-box;
-                        color: ${isDark ? '#E0E0E0' : '#666'};
+                        color: ${theme.textColor};
                     ">
-                        <h3 style="margin: 0 0 10px 0; color: ${isDark ? '#ffffff' : '#333'};">Media Player</h3>
+                        <h3 style="margin: 0 0 10px 0; color: ${theme.headingColor};">Media Player</h3>
                         <div>
                             支持：<br>
                             1. 网页 URL<br>
                             2. 视频嵌入代码<br>
-                            3. GitHub Markdown 地址
+                            3. GitHub Markdown地址
                         </div>
                     </div>
                 `;
@@ -1043,7 +1060,6 @@ class MediaPlayerNode extends BaseNode {
         let url = this.properties.url;
         if (url && url.trim()) {
             url = url.trim();
-            
 
             if (url.includes('github.com') && (url.endsWith('.md') || url.includes('/blob/'))) {
                 try {
@@ -1120,7 +1136,6 @@ class MediaPlayerNode extends BaseNode {
             }
             
             if (url.includes('<iframe') || url.includes('<video')) {
-
                 let secureContent = url.replace(/http:\/\//g, 'https://');
                 secureContent = secureContent.replace(/\/\/player\.bilibili\.com/g, 'https://player.bilibili.com');
                
@@ -1154,7 +1169,6 @@ class MediaPlayerNode extends BaseNode {
                     `;
                 });
             } else {
-
                 if (!url.match(/^https?:\/\//)) {
                     url = 'https://' + url;
                 }
@@ -1198,6 +1212,7 @@ class MediaPlayerNode extends BaseNode {
         if (name === "theme") {
             this.properties[name] = value;
             this.applyTheme();
+            this.updateContent();
         }
         if (name === "url") {
             this.properties[name] = value;
@@ -1219,6 +1234,14 @@ class MediaPlayerNode extends BaseNode {
                 }
             }
         ];
+    }
+    configure(info) {
+        super.configure(info);
+        requestAnimationFrame(() => {
+            this.applyTheme();
+            this.updateContent();
+        });
+        return this;
     }
 }
 
