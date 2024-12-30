@@ -887,7 +887,6 @@ class MediaPlayerNode extends BaseNode {
     constructor(title = MediaPlayerNode.title) {
         super(title, MediaPlayerNode.comfyClass); 
         
-
         this.resizable = true;
         this.size = [320, 240];
         this.isVirtualNode = true;
@@ -895,6 +894,10 @@ class MediaPlayerNode extends BaseNode {
         this.serialize_widgets = true;
 
         this.addProperty("url", "", "string");
+        this.addProperty("theme", "light", "enum", { 
+            values: ["light", "dark"]
+        });
+        
         const container = document.createElement('div');
         const inner = document.createElement('div');
         this.inner = inner;
@@ -902,19 +905,22 @@ class MediaPlayerNode extends BaseNode {
         container.append(inner);
         inner.classList.add('media-player-preview');
         
-        // 设置容器样式
         container.style.cssText = `
             margin: 0;
             padding: 0;
             width: 100%;
             height: 100%;
             background: white;
+            display: flex;
+            overflow: hidden; 
         `;
         
         inner.style.cssText = `
             width: 100%;
             height: 100%;
             box-sizing: border-box;
+            overflow-y: auto;  
+            overflow-x: hidden; 
             background: #f0f0f0;
         `;
 
@@ -933,93 +939,248 @@ class MediaPlayerNode extends BaseNode {
         this.flags = {
             showTitle: false
         };
+
+        this.loadMarkedLibrary();
+        
         this.onConstructed();
         this.updateContent();
+        this.applyTheme();
     }
-    updateContent() {
+
+    async loadMarkedLibrary() {
+        if (typeof marked !== 'undefined') return;
+
+        return new Promise((resolve, reject) => {
+            const script = document.createElement('script');
+            script.src = './lib/marked.min.js';
+            script.onload = resolve;
+            script.onerror = reject;
+            document.head.appendChild(script);
+        });
+    }
+    applyTheme() {
+        const isDark = this.properties.theme === 'dark';
+        
+        this.color = isDark ? "#2D2D2D" : "#E0E0E0";
+        this.bgcolor = isDark ? "#1E1E1E" : "#FFFFFF";
+        
+        if (this.inner) {
+            this.inner.style.background = isDark ? '#1E1E1E' : '#f0f0f0';
+
+            const darkModeStyles = `
+                .dark-theme {
+                    color: #E0E0E0 !important;
+                }
+                .dark-theme a {
+                    color: #58a6ff !important;
+                }
+                .dark-theme h1, 
+                .dark-theme h2, 
+                .dark-theme h3, 
+                .dark-theme h4, 
+                .dark-theme h5, 
+                .dark-theme h6 {
+                    color: #ffffff !important;
+                }
+                .dark-theme code {
+                    color: #e6e6e6 !important;
+                    background-color: #2d2d2d !important;
+                }
+                .dark-theme pre {
+                    background-color: #2d2d2d !important;
+                }
+                .dark-theme blockquote {
+                    color: #bebebe !important;
+                    border-left-color: #4f4f4f !important;
+                }
+                .dark-theme table th,
+                .dark-theme table td {
+                    border-color: #4f4f4f !important;
+                }
+                .dark-theme hr {
+                    border-color: #4f4f4f !important;
+                }
+            `;
+
+            const oldStyle = document.getElementById('dark-mode-styles');
+            if (oldStyle) {
+                oldStyle.remove();
+            }
+
+            if (isDark) {
+                const styleTag = document.createElement('style');
+                styleTag.id = 'dark-mode-styles';
+                styleTag.textContent = darkModeStyles;
+                document.head.appendChild(styleTag);
+            }
+    
+
+            if (!this.properties.url) {
+                this.inner.innerHTML = `
+                    <div style="
+                        padding: 20px;
+                        background: ${isDark ? '#2D2D2D' : 'white'};
+                        border-radius: 4px;
+                        height: 100%;
+                        box-sizing: border-box;
+                        color: ${isDark ? '#E0E0E0' : '#666'};
+                    ">
+                        <h3 style="margin: 0 0 10px 0; color: ${isDark ? '#ffffff' : '#333'};">Media Player</h3>
+                        <div>
+                            支持：<br>
+                            1. 网页 URL<br>
+                            2. 视频嵌入代码<br>
+                            3. GitHub Markdown 地址
+                        </div>
+                    </div>
+                `;
+            }
+        }
+    }
+    async updateContent() {
         if (!this.inner) return;
         
         let url = this.properties.url;
         if (url && url.trim()) {
             url = url.trim();
             
-            if (url.includes('<iframe') || url.includes('<video')) {
-                // 嵌入代码只处理 http 到 https 的改
-               let secureContent = url.replace(/http:\/\//g, 'https://');
-               secureContent = secureContent.replace(/\/\/player\.bilibili\.com/g, 'https://player.bilibili.com');
-               
-               this.inner.innerHTML = `
-                   <div style="
-                       width: 100%;
-                       height: 100%;
-                       display: flex;
-                       align-items: center;
-                       justify-content: center;
-                       background: white;
-                       border-radius: 4px;
-                   ">
-                       ${secureContent}
-                   </div>
-               `;
-                const elements = this.inner.querySelectorAll('iframe, video');
-               elements.forEach(element => {
-                   if (element.src && element.src.startsWith('http:')) {
-                       element.src = element.src.replace('http:', 'https:');
-                   }
-                   
-                   element.style.cssText = `
-                       width: 100%;
-                       height: 100%;
-                       border: none;
-                       border-radius: 4px;
-                       background: black;
-                       max-width: 100%;
-                       max-height: 100%;
-                   `;
-               });
-           } else {
-               // 只对普通 URL 进行补全
-               if (!url.match(/^https?:\/\//)) {
-                   url = 'https://' + url;
-               }
-                let secureUrl = url;
-                if (url.startsWith('http:')) {
-                    secureUrl = url.replace('http:', 'https:');
+
+            if (url.includes('github.com') && (url.endsWith('.md') || url.includes('/blob/'))) {
+                try {
+
+                    const rawUrl = url
+                        .replace('github.com', 'raw.githubusercontent.com')
+                        .replace('/blob/', '/');
+                    
+                    console.log('获取 GitHub markdown:', rawUrl);
+                    
+                    const response = await fetch(rawUrl);
+                    if (!response.ok) {
+                        throw new Error('无法获取 Markdown 内容');
+                    }
+                    
+                    let content = await response.text();
+
+                    const baseUrl = rawUrl.substring(0, rawUrl.lastIndexOf('/'));
+                    content = content.replace(
+                        /!\[([^\]]*)\]\((?!http)([^)]+)\)/g,
+                        (match, alt, path) => {
+                            const imagePath = path.startsWith('./') ? path.slice(2) : path;
+                            return `![${alt}](${baseUrl}/${imagePath})`;
+                        }
+                    );
+
+                    const isDark = this.properties.theme === 'dark';
+                    this.inner.className = `markdown-body ${isDark ? 'dark-theme' : ''}`;
+                    this.inner.style.cssText = `
+                        width: 100%;
+                        height: 100%;
+                        overflow-y: auto;
+                        overflow-x: hidden;
+                        padding: 16px;
+                        box-sizing: border-box;
+                        background: ${isDark ? '#0d1117' : 'white'};
+                        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+                        font-size: 14px;
+                        line-height: 1.5;
+                        word-wrap: break-word;
+                        color: ${isDark ? '#E0E0E0' : '#24292f'};
+                    `;
+
+                    const styleElement = document.createElement('style');
+                    styleElement.textContent = `
+                        .markdown-body img {
+                            max-width: 100% !important;
+                            height: auto !important;
+                        }
+                        .markdown-body pre {
+                            max-width: 100% !important;
+                            overflow-x: auto !important;
+                        }
+                        .markdown-body table {
+                            display: block !important;
+                            max-width: 100% !important;
+                            overflow-x: auto !important;
+                        }
+                        .markdown-body * {
+                            max-width: 100% !important;
+                            box-sizing: border-box !important;
+                        }
+                    `;
+                    this.inner.appendChild(styleElement);
+
+                    this.inner.innerHTML = marked.parse(content) + styleElement.outerHTML;
+                    return;
+                } catch (error) {
+                    console.error('处理 Markdown 失败:', error);
+                    this.inner.innerHTML = `<div class="error" style="color: ${this.properties.theme === 'dark' ? '#ff6b6b' : '#ff0000'}">
+                        加载 Markdown 失败: ${error.message}</div>`;
+                    return;
                 }
-                 this.inner.innerHTML = `
-                    <iframe 
-                        src="${secureUrl}"
-                        style="
-                            width: 100%;
-                            height: 100%;
-                            border: none;
-                            border-radius: 4px;
-                            background: white;
-                        "
-                        allowfullscreen
-                        referrerpolicy="no-referrer"
-                        sandbox="allow-scripts allow-same-origin allow-popups allow-presentation"
-                    ></iframe>
+            }
+            
+            if (url.includes('<iframe') || url.includes('<video')) {
+
+                let secureContent = url.replace(/http:\/\//g, 'https://');
+                secureContent = secureContent.replace(/\/\/player\.bilibili\.com/g, 'https://player.bilibili.com');
+               
+                this.inner.innerHTML = `
+                    <div style="
+                        width: 100%;
+                        height: 100%;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        background: ${this.properties.theme === 'dark' ? '#2D2D2D' : 'white'};
+                        border-radius: 4px;
+                    ">
+                        ${secureContent}
+                    </div>
                 `;
+                const elements = this.inner.querySelectorAll('iframe, video');
+                elements.forEach(element => {
+                    if (element.src && element.src.startsWith('http:')) {
+                       element.src = element.src.replace('http:', 'https:');
+                    }
+                   
+                    element.style.cssText = `
+                        width: 100%;
+                        height: 100%;
+                        border: none;
+                        border-radius: 4px;
+                        background: black;
+                        max-width: 100%;
+                        max-height: 100%;
+                    `;
+                });
+            } else {
+
+                if (!url.match(/^https?:\/\//)) {
+                    url = 'https://' + url;
+                }
+                    let secureUrl = url;
+                    if (url.startsWith('http:')) {
+                        secureUrl = url.replace('http:', 'https:');
+                    }
+                    this.inner.innerHTML = `
+                        <iframe 
+                            src="${secureUrl}"
+                            style="
+                                width: 100%;
+                                height: 100%;
+                                border: none;
+                                border-radius: 4px;
+                                background: ${this.properties.theme === 'dark' ? '#2D2D2D' : 'white'};
+                            "
+                            allowfullscreen
+                            referrerpolicy="no-referrer"
+                            sandbox="allow-scripts allow-same-origin allow-popups allow-presentation"
+                        ></iframe>
+                    `;
             }
         } else {
 
-            this.inner.innerHTML = `
-                <div style="
-                    padding: 20px;
-                    background: white;
-                    border-radius: 4px;
-                    height: 100%;
-                    box-sizing: border-box;
-                ">
-                    <h3 style="margin: 0 0 10px 0;">Media Player</h3>
-                    <div style="color: #666;">
-                        支持：<br>
-                        1. 网页 URL<br>
-                        2. 视频嵌入代码
-                    </div>
-                </div>
-            `;
+            this.applyTheme();
         }
 
         const iframes = this.inner.querySelectorAll('iframe');
@@ -1030,13 +1191,36 @@ class MediaPlayerNode extends BaseNode {
             iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-popups allow-presentation');
         });
     }
-     onPropertyChanged(name, value) {
+
+    onPropertyChanged(name, value) {
+        super.onPropertyChanged?.(name, value);
+        
+        if (name === "theme") {
+            this.properties[name] = value;
+            this.applyTheme();
+        }
         if (name === "url") {
+            this.properties[name] = value;
             this.updateContent();
         }
     }
+    getExtraMenuOptions() {
+        return [
+            {
+                content: this.properties.theme === 'light' ? "✓ 浅色主题" : "浅色主题",
+                callback: () => {
+                    this.setProperty("theme", "light");
+                }
+            },
+            {
+                content: this.properties.theme === 'dark' ? "✓ 深色主题" : "深色主题",
+                callback: () => {
+                    this.setProperty("theme", "dark");
+                }
+            }
+        ];
+    }
 }
-
 
 MediaPlayerNode.collapsable = false;
 app.registerExtension({
