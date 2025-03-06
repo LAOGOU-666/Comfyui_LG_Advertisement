@@ -927,7 +927,6 @@ class MediaPlayerNode extends BaseNode {
         this.html_widget = this.addDOMWidget('HTML', 'html', container, {
             setValue: () => {},
             getValue: () => {},
-            getMinHeight: () => this.size[1],
             onDraw: () => {
                 this.html_widget.element.style.pointerEvents = 'all';
             }
